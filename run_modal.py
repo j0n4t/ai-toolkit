@@ -23,10 +23,10 @@ os.environ['DISABLE_TELEMETRY'] = 'YES'
 
 # define the volume for storing model outputs, using "creating volumes lazily": https://modal.com/docs/guide/volumes
 # you will find your model, samples and optimizer stored in: https://modal.com/storage/your-username/main/flux-lora-models
-model_volume = modal.Volume.from_name("flux-lora-models", create_if_missing=True)
+model_volume = modal.Volume.from_name("zimage-lora-models", create_if_missing=True)
 
 # modal_output, due to "cannot mount volume on non-empty path" requirement
-MOUNT_DIR = "/root/ai-toolkit/modal_output"  # modal_output, due to "cannot mount volume on non-empty path" requirement
+MOUNT_DIR = "/root/ai-toolkit/modal_output/loras/sketch_v2"  # modal_output, due to "cannot mount volume on non-empty path" requirement
 
 # define modal app
 image = (
