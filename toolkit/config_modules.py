@@ -4,7 +4,6 @@ from typing import List, Optional, Literal, Tuple, Union, TYPE_CHECKING, Dict
 import random
 
 import torch
-import torchaudio
 
 from toolkit.prompt_utils import PromptEmbeds
 
@@ -1157,15 +1156,6 @@ class GenerateImageConfig:
                 )
             else:
                 raise ValueError(f"Unsupported video format {self.output_ext}")
-        elif self.output_ext in ['wav', 'mp3']:
-            # save audio file
-            torchaudio.save(
-                self.get_image_path(count, max_count), 
-                image[0].to('cpu'),
-                sample_rate=48000, 
-                format=None, 
-                backend=None
-            )
         else:
             # TODO save image gen header info for A1111 and us, our seeds probably wont match
             image.save(self.get_image_path(count, max_count))
