@@ -12,7 +12,7 @@ from PIL import Image
 KOBOLDCPP_URL = "http://127.0.0.1:5001/v1/chat/completions"
 IMAGE_FOLDER  = sys.argv[1] if len(sys.argv) > 1 else "dataset"
 OUTPUT_EXT    = ".txt"       # caption save format
-MODEL_NAME    = "koboldcpp/google_gemma-3-4b-it-Q6_K_L"    # must match your koboldcpp model id
+MODEL_NAME    = "koboldcpp/gemma-4-E4B-it-Q6_K"    # must match your koboldcpp model id
 MAX_TOKENS    = 256          # caption length
 PROMPT        = """
 You create simple factual image captions for training.
