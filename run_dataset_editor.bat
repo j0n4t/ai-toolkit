@@ -1,0 +1,1 @@
+uv run --with fastapi --with uvicorn uvicorn dataset_editor.server:app --port 8000

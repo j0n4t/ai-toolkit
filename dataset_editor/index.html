@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Dataset Browser</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .viewer-container {
+            max-width: 800px;
+            width: 100%;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: max-width 0.3s ease;
+        }
+
+        /* Expands the container width when in horizontal mode */
+        .viewer-container.horizontal-layout {
+            max-width: 800px;
+        }
+
+        .top-bar {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .folder-select-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-grow: 1;
+        }
+
+        select {
+            padding: 8px 12px;
+            font-size: 15px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            background: white;
+            cursor: pointer;
+            flex-grow: 1;
+        }
+
+        /* Default Media Box: Vertical Stack */
+        .media-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        /* Toggled Media Box: Horizontal Split */
+        .viewer-container.horizontal-layout .media-box {
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .image-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
+        .viewer-container.horizontal-layout .image-wrapper {
+            width: 50%;
+        }
+
+        img {
+            max-width: 100%;
+            max-height: 450px;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .text-wrapper {
+            width: 100%;
+        }
+
+        .viewer-container.horizontal-layout .text-wrapper {
+            width: 50%;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 15px;
+            font-family: inherit;
+            font-size: 15px;
+            border: 1px solid #ccc;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+            resize: vertical;
+            box-sizing: border-box;
+            background-color: #f9f9f9;
+        }
+
+        /* Adjust textarea height to match image size better in horizontal view */
+        .viewer-container.horizontal-layout textarea {
+            height: 450px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #0056b3;
+            background-color: #fff;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+        .btn-secondary:hover { background-color: #5a6268; }
+
+        .file-info { font-weight: bold; color: #666; text-align: center; }
+        .status-indicator { font-size: 13px; margin-top: 5px; text-align: right; color: #28a745; height: 18px; font-weight: 500; }
+    </style>
+</head>
+<body>
+
+    <div class="viewer-container" id="main-container">
+        <div class="top-bar">
+            <div class="folder-select-container">
+                <label for="folder-select" style="font-weight: bold; color: #444; white-space: nowrap;">Dataset:</label>
+                <select id="folder-select" onchange="handleFolderChange()">
+                    <option value="">-- Loading folders... --</option>
+                </select>
+            </div>
+            <button class="btn-secondary" onclick="toggleLayout()">Layout ⇄</button>
+        </div>
+
+        <div class="file-info" id="file-info">Select a folder to begin</div>
+        
+        <div class="media-box">
+            <div class="image-wrapper">
+                <img id="display-image" src="" alt="" style="display:none;">
+            </div>
+            <div class="text-wrapper">
+                <textarea id="display-text" oninput="triggerAutoSave()" placeholder="Type description here..." disabled></textarea>
+                <div id="save-status" class="status-indicator"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="prev-btn" onclick="changeItem(-1)" disabled>Previous</button>
+            <button id="next-btn" onclick="changeItem(1)" disabled>Next</button>
+        </div>
+    </div>
+
+    <script>
+        let imageFiles = [];
+        let currentIndex = 0;
+        let currentFolder = "";
+        let saveTimeout;
+
+        function getTextFileName(imageName) {
+            const lastDot = imageName.lastIndexOf('.');
+            return imageName.substring(0, lastDot) + '.txt';
+        }
+
+        function toggleLayout() {
+            const container = document.getElementById('main-container');
+            container.classList.toggle('horizontal-layout');
+        }
+
+        async function loadFolders() {
+            try {
+                const response = await fetch('/folders');
+                const folders = await response.json();
+                const select = document.getElementById('folder-select');
+                select.innerHTML = '';
+
+                if (folders.length === 0) {
+                    select.innerHTML = '<option value="">No sub-folders found in datasets/</option>';
+                    return;
+                }
+
+                folders.forEach(folder => {
+                    const option = document.createElement('option');
+                    option.value = folder;
+                    option.textContent = folder;
+                    select.appendChild(option);
+                });
+
+                handleFolderChange();
+            } catch (err) {
+                document.getElementById('file-info').innerText = "Failed to load datasets.";
+            }
+        }
+
+        async function handleFolderChange() {
+            currentFolder = document.getElementById('folder-select').value;
+            if (!currentFolder) return;
+
+            const response = await fetch(`/files/${currentFolder}`);
+            imageFiles = await response.json();
+            
+            currentIndex = 0;
+            
+            if (imageFiles.length === 0) {
+                document.getElementById('file-info').innerText = "No valid images found in this folder.";
+                document.getElementById('display-image').style.display = "none";
+                document.getElementById('display-text').value = "";
+                document.getElementById('display-text').disabled = true;
+                document.getElementById('prev-btn').disabled = true;
+                document.getElementById('next-btn').disabled = true;
+                return;
+            }
+
+            document.getElementById('display-text').disabled = false;
+            await updateViewer();
+        }
+
+        async function updateViewer() {
+            if (imageFiles.length === 0) return;
+
+            if (saveTimeout) {
+                clearTimeout(saveTimeout);
+                await saveChanges();
+            }
+
+            const currentImage = imageFiles[currentIndex];
+            const currentText = getTextFileName(currentImage);
+
+            document.getElementById('file-info').innerText = `[${currentIndex + 1}/${imageFiles.length}] ${currentImage}`;
+            
+            const imgElement = document.getElementById('display-image');
+            imgElement.style.display = "block";
+            imgElement.src = `/files/${currentFolder}/${currentImage}`;
+
+            const textElement = document.getElementById('display-text');
+            document.getElementById('save-status').innerText = "";
+
+            try {
+                // FIXED: URL parameters added here prevent browser caching bugs on fast navigation
+                const response = await fetch(`/files/${currentFolder}/${currentText}?t=${new Date().getTime()}`);
+                if (!response.ok) throw new Error();
+                textElement.value = await response.text();
+            } catch {
+                textElement.value = ""; 
+            }
+
+            document.getElementById('prev-btn').disabled = (currentIndex === 0);
+            document.getElementById('next-btn').disabled = (currentIndex === imageFiles.length - 1);
+        }
+
+        function triggerAutoSave() {
+            const statusElement = document.getElementById('save-status');
+            statusElement.style.color = "#ffc107";
+            statusElement.innerText = "Typing...";
+            
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(saveChanges, 800);
+        }
+
+        async function saveChanges() {
+            if (imageFiles.length === 0) return;
+            const textContent = document.getElementById('display-text').value;
+            const filename = getTextFileName(imageFiles[currentIndex]);
+            const statusElement = document.getElementById('save-status');
+
+            statusElement.style.color = "#007bff";
+            statusElement.innerText = "Saving...";
+
+            try {
+                const response = await fetch(`/save/${currentFolder}/${filename}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: textContent })
+                });
+                if (response.ok) {
+                    statusElement.style.color = "#28a745";
+                    statusElement.innerText = "Saved!";
+                } else { throw new Error(); }
+            } catch {
+                statusElement.style.color = "#dc3545";
+                statusElement.innerText = "Error saving.";
+            }
+            saveTimeout = null;
+        }
+
+        async function changeItem(direction) {
+            currentIndex += direction;
+            await updateViewer();
+        }
+
+        window.onload = loadFolders;
+    </script>
+</body>
+</html>
